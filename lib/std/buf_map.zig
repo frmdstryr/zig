@@ -12,8 +12,7 @@ pub const BufMap = struct {
     const BufMapHashMap = StringHashMap([]const u8);
 
     pub fn init(allocator: *Allocator) BufMap {
-        var self = BufMap{ .hash_map = BufMapHashMap.init(allocator) };
-        return self;
+        return BufMap{ .hash_map = BufMapHashMap.init(allocator) };
     }
 
     pub fn deinit(self: *BufMap) void {
