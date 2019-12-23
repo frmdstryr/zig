@@ -168,7 +168,7 @@ fn zigifyEscapeSequences(allocator: *std.mem.Allocator, tok: CToken) !CToken {
                         num += c - 'A' + 10;
                     },
                     else => {
-                        i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{.fill = '0', .width = 2});
+                        i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{ .fill = '0', .width = 2 });
                         num = 0;
                         if (c == '\\')
                             state = .Escape
@@ -190,7 +190,7 @@ fn zigifyEscapeSequences(allocator: *std.mem.Allocator, tok: CToken) !CToken {
                     },
                     else => {},
                 }
-                i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{.fill = '0', .width = 2});
+                i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{ .fill = '0', .width = 2 });
                 state = .Start;
                 count = 0;
                 num = 0;
@@ -198,7 +198,7 @@ fn zigifyEscapeSequences(allocator: *std.mem.Allocator, tok: CToken) !CToken {
         }
     }
     if (state == .Hex or state == .Octal)
-        i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{.fill = '0', .width = 2});
+        i += std.fmt.formatIntBuf(bytes[i..], num, 16, false, std.fmt.FormatOptions{ .fill = '0', .width = 2 });
     return CToken{
         .id = tok.id,
         .bytes = bytes[0..i],
