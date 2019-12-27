@@ -4475,6 +4475,18 @@ fn parseCSuffixOpExpr(rp: RestorePoint, it: *ctok.TokenList.Iterator, source_loc
                 };
                 node = &bitshift_node.base;
             },
+            .Shr => {
+                const op_token = try appendToken(rp.c, .AngleBracketAngleBracketRight, ">>");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const bitshift_node = try rp.c.a().create(ast.Node.InfixOp);
+                bitshift_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .BitShiftRight,
+                    .rhs = rhs,
+                };
+                node = &bitshift_node.base;
+            },
             .Pipe => {
                 const op_token = try appendToken(rp.c, .Pipe, "|");
                 const rhs = try parseCExpr(rp, it, source_loc, scope);
@@ -4483,6 +4495,66 @@ fn parseCSuffixOpExpr(rp: RestorePoint, it: *ctok.TokenList.Iterator, source_loc
                     .op_token = op_token,
                     .lhs = node,
                     .op = .BitOr,
+                    .rhs = rhs,
+                };
+                node = &or_node.base;
+            },
+            .Ampersand => {
+                const op_token = try appendToken(rp.c, .Ampersand, "&");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const bitand_node = try rp.c.a().create(ast.Node.InfixOp);
+                bitand_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .BitAnd,
+                    .rhs = rhs,
+                };
+                node = &bitand_node.base;
+            },
+            .Plus => {
+                const op_token = try appendToken(rp.c, .Plus, "+");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const add_node = try rp.c.a().create(ast.Node.InfixOp);
+                add_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .Add,
+                    .rhs = rhs,
+                };
+                node = &add_node.base;
+            },
+            .Minus => {
+                const op_token = try appendToken(rp.c, .Minus, "-");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const sub_node = try rp.c.a().create(ast.Node.InfixOp);
+                sub_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .Sub,
+                    .rhs = rhs,
+                };
+                node = &sub_node.base;
+            },
+            .And => {
+                const op_token = try appendToken(rp.c, .Keyword_and, "and");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const and_node = try rp.c.a().create(ast.Node.InfixOp);
+                and_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .BoolAnd,
+                    .rhs = rhs,
+                };
+                node = &and_node.base;
+            },
+            .Or => {
+                const op_token = try appendToken(rp.c, .Keyword_or, "or");
+                const rhs = try parseCExpr(rp, it, source_loc, scope);
+                const or_node = try rp.c.a().create(ast.Node.InfixOp);
+                or_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .BoolOr,
                     .rhs = rhs,
                 };
                 node = &or_node.base;

@@ -14,6 +14,7 @@ pub const CToken = struct {
         NumLitInt,
         NumLitFloat,
         Identifier,
+        Plus,
         Minus,
         Slash,
         LParen,
@@ -21,10 +22,17 @@ pub const CToken = struct {
         Eof,
         Dot,
         Asterisk,
+        Ampersand,
+        And,
+        Or,
         Bang,
         Tilde,
         Shl,
+        Shr,
         Lt,
+        Gt,
+        Increment,
+        Decrement,
         Comma,
         Fn,
         Arrow,
@@ -209,6 +217,11 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
     var state: enum {
         Start,
         GotLt,
+        GotGt,
+        GotPlus,
+        GotMinus,
+        GotAmpersand,
+        GotPipe,
         CharLit,
         OpenComment,
         Comment,
@@ -229,7 +242,6 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
         NumLitIntSuffixL,
         NumLitIntSuffixLL,
         NumLitIntSuffixUL,
-        Minus,
         Done,
     } = .Start;
 
@@ -258,13 +270,17 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                     return result;
                 },
                 .Start,
-                .Minus,
+                .GotMinus,
                 .Done,
                 .NumLitIntSuffixU,
                 .NumLitIntSuffixL,
                 .NumLitIntSuffixUL,
                 .NumLitIntSuffixLL,
                 .GotLt,
+                .GotGt,
+                .GotPlus,
+                .GotAmpersand,
+                .GotPipe,
                 => {
                     return result;
                 },
@@ -325,6 +341,10 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Lt;
                         state = .GotLt;
                     },
+                    '>' => {
+                        result.id = .Gt;
+                        state = .GotGt;
+                    },
                     '(' => {
                         result.id = .LParen;
                         state = .Done;
@@ -337,9 +357,13 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Asterisk;
                         state = .Done;
                     },
+                    '+' => {
+                        result.id = .Plus;
+                        state = .GotPlus;
+                    },
                     '-' => {
-                        state = .Minus;
                         result.id = .Minus;
+                        state = .GotMinus;
                     },
                     '!' => {
                         result.id = .Bang;
@@ -363,16 +387,35 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                     },
                     '|' => {
                         result.id = .Pipe;
-                        state = .Done;
+                        state = .GotPipe;
+                    },
+                    '&' => {
+                        result.id = .Ampersand;
+                        state = .GotAmpersand;
                     },
                     else => return error.TokenizingFailed,
                 }
             },
             .Done => return result,
-            .Minus => {
+            .GotMinus => {
                 switch (c) {
                     '>' => {
                         result.id = .Arrow;
+                        state = .Done;
+                    },
+                    '-' => {
+                        result.id = .Decrement;
+                        state = .Done;
+                    },
+                    else => {
+                        return result;
+                    },
+                }
+            },
+            .GotPlus => {
+                switch (c) {
+                    '+' => {
+                        result.id = .Increment;
                         state = .Done;
                     },
                     else => {
@@ -384,6 +427,39 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                 switch (c) {
                     '<' => {
                         result.id = .Shl;
+                        state = .Done;
+                    },
+                    else => {
+                        return result;
+                    },
+                }
+            },
+            .GotGt => {
+                switch (c) {
+                    '>' => {
+                        result.id = .Shr;
+                        state = .Done;
+                    },
+                    else => {
+                        return result;
+                    },
+                }
+            },
+            .GotPipe => {
+                switch (c) {
+                    '|' => {
+                        result.id = .Or;
+                        state = .Done;
+                    },
+                    else => {
+                        return result;
+                    },
+                }
+            },
+            .GotAmpersand => {
+                switch (c) {
+                    '&' => {
+                        result.id = .And;
                         state = .Done;
                     },
                     else => {
