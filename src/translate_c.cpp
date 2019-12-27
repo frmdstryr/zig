@@ -5188,9 +5188,7 @@ Error parse_h_file(CodeGen *codegen, AstNode **out_root_node,
     Context context = {0};
     Context *c = &context;
 
-    // This should be on by default otherwise users assume it correctly
-    // translated everything even if it doesn't
-    c->warnings_on = !codegen->quiet_translate_c;
+    c->warnings_on = codegen->verbose_cimport;
 
     if (mode == TranslateModeImport) {
         c->want_export = false;

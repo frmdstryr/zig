@@ -257,7 +257,6 @@ void tokenize_c_macro(CTokenize *ctok, const uint8_t *c) {
                     case '-':
                         begin_token(ctok, CTokIdMinus);
                         ctok->state = CTokStateGotMinus;
-                        end_token(ctok);
                         break;
                     case '!':
                         begin_token(ctok, CTokIdBang);
@@ -445,7 +444,6 @@ void tokenize_c_macro(CTokenize *ctok, const uint8_t *c) {
                     default:
                         c -= 1;
                         ctok->state = CTokStateOctal;
-                        ctok->cur_tok->data.num_lit_int.format = CNumLitFormatOctal;
                         continue;
                 }
                 break;
@@ -463,6 +461,8 @@ void tokenize_c_macro(CTokenize *ctok, const uint8_t *c) {
                         ctok->cur_tok->data.num_lit_int.x *= 8;
                         // TODO @add_with_overflow
                         ctok->cur_tok->data.num_lit_int.x += *c - '0';
+                        // Set the format here to avoid formatting a single 0 as an octal
+                        ctok->cur_tok->data.num_lit_int.format = CNumLitFormatOctal;
                         break;
                     case '8':
                     case '9':
