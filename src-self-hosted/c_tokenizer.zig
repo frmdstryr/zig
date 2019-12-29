@@ -21,21 +21,26 @@ pub const CToken = struct {
         RParen,
         Eof,
         Dot,
-        Asterisk,
-        Ampersand,
-        And,
-        Or,
-        Bang,
-        Tilde,
-        Shl,
-        Shr,
-        Lt,
-        Gt,
-        Increment,
-        Decrement,
+        Asterisk, // *
+        Ampersand, // &
+        And, // &&
+        Assign, // =
+        Or, // ||
+        Bang, // !
+        Tilde, // ~
+        Shl, // <<
+        Shr, // >>
+        Lt, // <
+        Lte, // <=
+        Gt, // >
+        Gte, // >=
+        Eq, // ==
+        Ne, // !=
+        Increment, // ++
+        Decrement, // --
         Comma,
         Fn,
-        Arrow,
+        Arrow, // ->
         LBrace,
         RBrace,
         Pipe,
@@ -51,6 +56,20 @@ pub const CToken = struct {
         LLU,
     };
 };
+
+
+pub fn ctoken(id: CToken.Id, bytes: []const u8) CToken {
+    return CToken{.id = id, .bytes = bytes};
+}
+
+pub fn cnumtoken(suffix: CToken.NumLitSuffix, bytes: []const u8,) CToken {
+    return CToken{
+        .id = if (suffix == .F) .NumLitFloat else .NumLitInt,
+        .bytes = bytes,
+        .num_lit_suffix = suffix
+    };
+}
+
 
 pub fn tokenizeCMacro(tl: *TokenList, chars: [*:0]const u8) !void {
     var index: usize = 0;
@@ -222,6 +241,8 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
         GotMinus,
         GotAmpersand,
         GotPipe,
+        GotBang,
+        GotEq,
         CharLit,
         OpenComment,
         Comment,
@@ -281,6 +302,8 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                 .GotPlus,
                 .GotAmpersand,
                 .GotPipe,
+                .GotBang,
+                .GotEq,
                 => {
                     return result;
                 },
@@ -367,11 +390,15 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                     },
                     '!' => {
                         result.id = .Bang;
-                        state = .Done;
+                        state = .GotBang;
                     },
                     '~' => {
                         result.id = .Tilde;
                         state = .Done;
+                    },
+                    '=' => {
+                        result.id = .Assign;
+                        state = .GotEq;
                     },
                     ',' => {
                         result.id = .Comma;
@@ -407,9 +434,7 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Decrement;
                         state = .Done;
                     },
-                    else => {
-                        return result;
-                    },
+                    else => return result,
                 }
             },
             .GotPlus => {
@@ -418,9 +443,7 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Increment;
                         state = .Done;
                     },
-                    else => {
-                        return result;
-                    },
+                    else => return result,
                 }
             },
             .GotLt => {
@@ -429,9 +452,11 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Shl;
                         state = .Done;
                     },
-                    else => {
-                        return result;
+                    '=' => {
+                        result.id = .Lte;
+                        state = .Done;
                     },
+                    else => return result,
                 }
             },
             .GotGt => {
@@ -440,9 +465,11 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Shr;
                         state = .Done;
                     },
-                    else => {
-                        return result;
+                    '=' => {
+                        result.id = .Gte;
+                        state = .Done;
                     },
+                    else => return result,
                 }
             },
             .GotPipe => {
@@ -451,9 +478,7 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .Or;
                         state = .Done;
                     },
-                    else => {
-                        return result;
-                    },
+                    else => return result,
                 }
             },
             .GotAmpersand => {
@@ -462,9 +487,25 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
                         result.id = .And;
                         state = .Done;
                     },
-                    else => {
-                        return result;
+                    else => return result,
+                }
+            },
+            .GotBang => {
+                switch (c) {
+                    '=' => {
+                        result.id = .Ne;
+                        state = .Done;
                     },
+                    else => return result,
+                }
+            },
+            .GotEq => {
+                switch (c) {
+                    '=' => {
+                        result.id = .Eq;
+                        state = .Done;
+                    },
+                    else => return result,
                 }
             },
             .Float => {
@@ -756,57 +797,101 @@ fn next(chars: [*:0]const u8, i: *usize) !CToken {
     unreachable;
 }
 
+
+fn expectTokens(tl: *TokenList, src: [*:0]const u8, expected: []CToken) void {
+    tokenizeCMacro(tl, src) catch unreachable;
+    var it = tl.iterator(0);
+    for (expected) |t| {
+        var tok = it.next().?;
+        std.testing.expectEqual(t.id, tok.id);
+        if (t.bytes.len > 0) {
+            //std.debug.warn("  {} = {}\n", .{tok.bytes, t.bytes});
+            std.testing.expectEqualSlices(u8, tok.bytes, t.bytes);
+        }
+        if (t.num_lit_suffix != .None) {
+            std.testing.expectEqual(t.num_lit_suffix, tok.num_lit_suffix);
+        }
+    }
+    std.testing.expect(it.next() == null);
+    tl.shrink(0);
+}
+
+
 test "tokenize macro" {
     var tl = TokenList.init(std.heap.page_allocator);
     defer tl.deinit();
 
-    const src = "TEST(0\n";
-    try tokenizeCMacro(&tl, src);
-    var it = tl.iterator(0);
-    expect(it.next().?.id == .Identifier);
-    expect(it.next().?.id == .Fn);
-    expect(it.next().?.id == .LParen);
-    expect(std.mem.eql(u8, it.next().?.bytes, "0"));
-    expect(it.next().?.id == .Eof);
-    expect(it.next() == null);
-    tl.shrink(0);
+    expectTokens(&tl, "TEST(0\n", &[_]CToken{
+        ctoken(.Identifier, "TEST"),
+        ctoken(.Fn, ""),
+        ctoken(.LParen, ""),
+        ctoken(.NumLitInt, "0"),
+        ctoken(.Eof, ""),
+    });
 
-    const src2 = "__FLT_MIN_10_EXP__ -37\n";
-    try tokenizeCMacro(&tl, src2);
-    it = tl.iterator(0);
-    expect(std.mem.eql(u8, it.next().?.bytes, "__FLT_MIN_10_EXP__"));
-    expect(it.next().?.id == .Minus);
-    expect(std.mem.eql(u8, it.next().?.bytes, "37"));
-    expect(it.next().?.id == .Eof);
-    expect(it.next() == null);
-    tl.shrink(0);
+    expectTokens(&tl, "__FLT_MIN_10_EXP__ -37\n", &[_]CToken{
+        ctoken(.Identifier, "__FLT_MIN_10_EXP__"),
+        ctoken(.Minus, ""),
+        ctoken(.NumLitInt, "37"),
+        ctoken(.Eof, ""),
+    });
 
-    const src3 = "__llvm__ 1\n#define";
-    try tokenizeCMacro(&tl, src3);
-    it = tl.iterator(0);
-    expect(std.mem.eql(u8, it.next().?.bytes, "__llvm__"));
-    expect(std.mem.eql(u8, it.next().?.bytes, "1"));
-    expect(it.next().?.id == .Eof);
-    expect(it.next() == null);
-    tl.shrink(0);
+    expectTokens(&tl, "__llvm__ 1\n#define", &[_]CToken{
+        ctoken(.Identifier, "__llvm__"),
+        ctoken(.NumLitInt, "1"),
+        ctoken(.Eof, ""),
 
-    const src4 = "TEST 2";
-    try tokenizeCMacro(&tl, src4);
-    it = tl.iterator(0);
-    expect(it.next().?.id == .Identifier);
-    expect(std.mem.eql(u8, it.next().?.bytes, "2"));
-    expect(it.next().?.id == .Eof);
-    expect(it.next() == null);
-    tl.shrink(0);
+    });
 
-    const src5 = "FOO 0ull";
-    try tokenizeCMacro(&tl, src5);
-    it = tl.iterator(0);
-    expect(it.next().?.id == .Identifier);
-    expect(std.mem.eql(u8, it.next().?.bytes, "0"));
-    expect(it.next().?.id == .Eof);
-    expect(it.next() == null);
-    tl.shrink(0);
+    expectTokens(&tl, "TEST 2", &[_]CToken{
+        ctoken(.Identifier, "TEST"),
+        ctoken(.NumLitInt, "2"),
+        ctoken(.Eof, ""),
+
+    });
+
+    expectTokens(&tl, "FOO 0ull", &[_]CToken{
+        ctoken(.Identifier, "FOO"),
+        cnumtoken(.LLU, "0"),
+        ctoken(.Eof, ""),
+
+    });
+
+}
+
+
+
+test "tokenize macro ops" {
+    var tl = TokenList.init(std.heap.page_allocator);
+    defer tl.deinit();
+
+    expectTokens(&tl, "ADD A + B", &[_]CToken{
+        ctoken(.Identifier, "ADD"),
+        ctoken(.Identifier, "A"),
+        ctoken(.Plus, ""),
+        ctoken(.Identifier, "B"),
+        ctoken(.Eof, ""),
+    });
+
+     expectTokens(&tl, "ADD (A) + B", &[_]CToken{
+        ctoken(.Identifier, "ADD"),
+        ctoken(.LParen, ""),
+        ctoken(.Identifier, "A"),
+        ctoken(.RParen, ""),
+        ctoken(.Plus, ""),
+        ctoken(.Identifier, "B"),
+        ctoken(.Eof, ""),
+    });
+
+    expectTokens(&tl, "ADD (A) + B", &[_]CToken{
+        ctoken(.Identifier, "ADD"),
+        ctoken(.LParen, ""),
+        ctoken(.Identifier, "A"),
+        ctoken(.RParen, ""),
+        ctoken(.Plus, ""),
+        ctoken(.Identifier, "B"),
+        ctoken(.Eof, ""),
+    });
 }
 
 test "escape sequences" {
