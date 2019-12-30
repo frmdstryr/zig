@@ -49,6 +49,8 @@ pub const CToken = struct {
         Pipe,
         QuestionMark,
         Colon,
+        Stringify, // #
+        Concat, // ##
     };
 
     pub const NumLitSuffix = enum {
@@ -246,6 +248,7 @@ fn next(ctx: *Context, loc: ZigClangSourceLocation, name: []const u8, chars: [*:
         SawPipe,
         SawBang,
         SawEq,
+        SawHash,
         CharLit,
         OpenComment,
         Comment,
@@ -318,6 +321,7 @@ fn next(ctx: *Context, loc: ZigClangSourceLocation, name: []const u8, chars: [*:
                 .String,
                 .ExpSign,
                 .FloatExpFirst,
+                .SawHash,
                 => {
                     try failDecl(ctx, loc, name, "macro tokenizing failed: unexpected EOF", .{});
                     return error.TokenizingFailed;
@@ -434,6 +438,10 @@ fn next(ctx: *Context, loc: ZigClangSourceLocation, name: []const u8, chars: [*:
                         result.id = .Colon;
                         state = .Done;
                     },
+                    '#' => {
+                        result.id = .Stringify;
+                        state = .SawHash;
+                    },
                     else => {
                         try failDecl(ctx, loc, name, "macro tokenizing failed: unexpected character '{c}'", .{c});
                         return error.TokenizingFailed;
@@ -520,6 +528,15 @@ fn next(ctx: *Context, loc: ZigClangSourceLocation, name: []const u8, chars: [*:
                 switch (c) {
                     '=' => {
                         result.id = .Eq;
+                        state = .Done;
+                    },
+                    else => return result,
+                }
+            },
+            .SawHash => {
+                switch (c) {
+                    '#' => { // Concat
+                        result.id = .Concat;
                         state = .Done;
                     },
                     else => return result,
@@ -837,7 +854,7 @@ fn expectTokens(tl: *TokenList, src: [*:0]const u8, expected: []CToken) void {
         var tok = it.next().?;
         std.testing.expectEqual(t.id, tok.id);
         if (t.bytes.len > 0) {
-            //std.debug.warn("  {} = {}\n", .{tok.bytes, t.bytes});
+            //std.debug.warn("  Got '{}' expected '{}'\n", .{tok.bytes, t.bytes});
             std.testing.expectEqualSlices(u8, tok.bytes, t.bytes);
         }
         if (t.num_lit_suffix != .None) {
@@ -884,6 +901,56 @@ test "tokenize macro" {
         .{ .id = .NumLitInt, .bytes = "0", .num_lit_suffix = .LLU },
         .{ .id = .Eof },
     });
+}
+
+test "tokenize macro stringify" {
+    var tl = TokenList.init(std.heap.page_allocator);
+    defer tl.deinit();
+
+    expectTokens(&tl, "str(s) #s", &[_]CToken{
+        .{ .id = .Identifier, .bytes = "str" },
+        .{ .id = .Fn },
+        .{ .id = .LParen },
+        .{ .id = .Identifier, .bytes = "s" },
+        .{ .id = .RParen },
+        .{ .id = .Stringify },
+        .{ .id = .Identifier, .bytes = "s" },
+        .{ .id = .Eof },
+    });
+}
+
+test "tokenize macro concat" {
+    var tl = TokenList.init(std.heap.page_allocator);
+    defer tl.deinit();
+    expectTokens(&tl, "_FLD2VAL(field, value)    (((uint32_t)(value) & field ## _Msk) >> field ## _Pos)", &[_]CToken{
+        .{ .id = .Identifier, .bytes = "_FLD2VAL" },
+        .{ .id = .Fn },
+        .{ .id = .LParen },
+        .{ .id = .Identifier, .bytes = "field" },
+        .{ .id = .Comma },
+        .{ .id = .Identifier, .bytes = "value" },
+        .{ .id = .RParen },
+        .{ .id = .LParen },
+            .{ .id = .LParen },
+                .{ .id = .LParen },
+                    .{ .id = .Identifier, .bytes = "uint32_t" },
+                .{ .id = .RParen },
+                .{ .id = .LParen },
+                    .{ .id = .Identifier, .bytes = "value" },
+                .{ .id = .RParen },
+                .{ .id = .Ampersand },
+                .{ .id = .Identifier, .bytes = "field" },
+                .{ .id = .Concat },
+                .{ .id = .Identifier, .bytes = "_Msk" },
+            .{ .id = .RParen },
+            .{ .id = .Shr },
+            .{ .id = .Identifier, .bytes = "field" },
+            .{ .id = .Concat },
+            .{ .id = .Identifier, .bytes = "_Pos" },
+        .{ .id = .RParen },
+        .{ .id = .Eof },
+    });
+
 }
 
 test "tokenize macro ops" {
