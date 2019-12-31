@@ -4700,6 +4700,30 @@ fn parseCSuffixOpExpr(c: *Context, it: *ctok.TokenList.Iterator, source_loc: Zig
                 };
                 node = &and_node.base;
             },
+            .Eq => {
+                const op_token = try appendToken(c, .EqualEqual, "==");
+                const rhs = try parseCPrefixOpExpr(c, it, source_loc, scope);
+                const op_node = try c.a().create(ast.Node.InfixOp);
+                op_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .EqualEqual,
+                    .rhs = rhs,
+                };
+                node = &op_node.base;
+            },
+            .Ne => {
+                const op_token = try appendToken(c, .BangEqual, "!=");
+                const rhs = try parseCPrefixOpExpr(c, it, source_loc, scope);
+                const op_node = try c.a().create(ast.Node.InfixOp);
+                op_node.* = .{
+                    .op_token = op_token,
+                    .lhs = node,
+                    .op = .BangEqual,
+                    .rhs = rhs,
+                };
+                node = &op_node.base;
+            },
             .LBrace => {
                 const arr_node = try transCreateNodeArrayAccess(c, node);
                 arr_node.op.ArrayAccess = try parseCPrefixOpExpr(c, it, source_loc, scope);

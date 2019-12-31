@@ -1089,6 +1089,18 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\pub const RCC_BASE = D3_AHB1PERIPH_BASE + @as(c_ulong, 0x4400);
     });
 
+    cases.add("macro bitwise or",
+        \\#define RCC_CR_HSEBYP             0x40000000UL
+        \\#define RCC_CR_HSEON              0x10000000UL
+        \\#define RCC_HSE_BYPASS            (RCC_CR_HSEBYP | RCC_CR_HSEON)
+    , &[_][]const u8{
+        \\pub const RCC_CR_HSEBYP = @as(c_ulong, 0x40000000);
+    ,
+        \\pub const RCC_CR_HSEON = @as(c_ulong, 0x10000000);
+    ,
+        \\pub const RCC_HSE_BYPASS = RCC_CR_HSEBYP | RCC_CR_HSEON;
+    });
+
     cases.add("variable aliasing",
         \\static long a = 2;
         \\static long b = 2;
@@ -2230,6 +2242,18 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
     ,
         \\pub inline fn MAX(a: var, b: var) @TypeOf(if (b > a) b else a) {
         \\    return if (b > a) b else a;
+        \\}
+    });
+
+    cases.add("macro fn equal",
+        \\typedef struct I2C_TypeDef;
+        \\#define I2C1                ((I2C_TypeDef *) 0x10000000)
+        \\#define IS_SMBUS_INSTANCE(INSTANCE)  ((INSTANCE) == I2C1)
+    , &[_][]const u8{
+        \\pub const I2C1 = if (@typeId(@TypeOf(0x10000000)) == .Pointer) @ptrCast([*c]I2C_TypeDef, 0x10000000) else if (@typeId(@TypeOf(0x10000000)) == .Int) @intToPtr([*c]I2C_TypeDef, 0x10000000) else @as([*c]I2C_TypeDef, 0x10000000);
+    ,
+        \\pub inline fn IS_SMBUS_INSTANCE(INSTANCE: var) @TypeOf(INSTANCE == I2C1) {
+        \\    return INSTANCE == I2C1;
         \\}
     });
 }
