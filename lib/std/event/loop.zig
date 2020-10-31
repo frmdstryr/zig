@@ -449,7 +449,17 @@ pub const Loop = struct {
                 error.FileDescriptorNotRegistered => unreachable,
                 error.OperationCausesCircularLoop => unreachable,
                 error.FileDescriptorIncompatibleWithEpoll => unreachable,
-                error.FileDescriptorAlreadyPresentInSet => unreachable, // evented writes to the same fd is not thread-safe
+                error.FileDescriptorAlreadyPresentInSet => switch (builtin.os.tag) {
+                    .linux => {
+                        // HACK: for https://github.com/ziglang/zig/issues/5614
+                        // In linux a broken pipe seems to trigger an epoll event
+                        // in another thread which causes this error. Removing it
+                        // here wakes up the other thread.
+                        need_to_delete = true;
+                        resume @frame();
+                    },
+                    else => unreachable, // evented writes to the same fd is not thread-safe
+                },
 
                 error.SystemResources,
                 error.UserResourceLimitReached,
